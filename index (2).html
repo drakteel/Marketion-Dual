@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marketion - Dual Route</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0b0e14; --panel:#111521; --muted:#8b9bb7; --text:#e6ecff; --accent:#7aa2ff; --good:#30d158; --bad:#ff453a; --chip:#1a2032;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      background: radial-gradient(1200px 700px at 70% -10%, #121830 0%, var(--bg) 55%);
+      color: var(--text);
+      padding-bottom: 60px;
+    }
+    .wrap { max-width: 1600px; margin: 24px auto; padding: 0 16px; }
+    
+    .dual-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 1100px) { .dual-grid { grid-template-columns: 1fr; } }
+
+    header { display:flex; gap: 16px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    h1 { font-size: clamp(20px, 2.6vw, 28px); margin: 8px 0; letter-spacing: 0.2px; }
+    .sub { color: var(--muted); font-size: 13px; }
+
+    .controls { display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; background: var(--panel); padding: 14px; border-radius: 16px; box-shadow: 0 10px 32px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04); }
+    .controls label { display:flex; flex-direction:column; gap: 6px; font-size: 12px; color: var(--muted); }
+    .controls input, .controls select { background: var(--chip); color: var(--text); border: 1px solid #1f2740; border-radius: 12px; padding: 8px 10px; outline: none; font-size: 13px; width: 100%; }
+    .controls .btn { align-self:end; padding: 8px 12px; background: linear-gradient(180deg, #2a355a, #1e2742); border: 1px solid #2a3660; color: #cfe1ff; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 12px; }
+    
+    .pill { display:inline-flex; align-items:center; gap:6px; padding: 6px 10px; border-radius: 999px; background: #152040; border:1px solid #243868; color:#cfe1ff; font-size:12px; }
+
+    .grid-container { margin-top: 16px; background: var(--panel); border-radius: 16px; overflow: hidden; box-shadow: 0 16px 32px rgba(0,0,0,.35); border: 1px solid #1f2740; }
+    .table-scroll { overflow-x: auto; max-height: 500px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+    thead th { position: sticky; top: 0; background: #121830; padding: 10px; text-align: left; font-weight: 800; font-size: 11px; letter-spacing: .06em; color: #9db1de; text-transform: uppercase; z-index: 10; }
+    tbody td { padding: 8px 10px; border-top: 1px solid #1e2740; }
+    tbody tr:hover { background: rgba(122,162,255,0.06); cursor: pointer; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); font-size: 11px; }
+    .good { color: var(--good); font-weight: 700; }
+    .bad { color: var(--bad); font-weight: 700; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+
+    .chart-section { margin-top: 16px; background: var(--panel); padding: 14px; border-radius: 16px; border: 1px solid #1f2740; }
+    .toast { position: fixed; right: 16px; bottom: 16px; background: #152040; color:#cfe1ff; padding: 10px 12px; border-radius: 12px; border:1px solid #2a3660; box-shadow: 0 8px 24px rgba(0,0,0,.35); font-size: 12px; opacity:0; transform: translateY(6px); transition: .35s ease; z-index: 100; }
+    .toast.show { opacity:1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Marketion Dual <span class="muted">v2</span></h1>
+        <div class="sub">Monitoramento simultâneo de rotas comerciais.</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items: center;">
+        <label style="font-size: 11px; color: var(--muted);">Refresh (s): 
+            <input id="globalRefreshInterval" type="number" value="1" min="1" style="width:50px; background:var(--chip); border:1px solid #2a3660; color:white; border-radius:6px; padding:2px 5px;">
+        </label>
+        <div class="pill">Atualizado: <span class="mono" id="lastUpdate">–</span></div>
+        <button class="controls btn" id="toggleCalcBtn" style="align-self: auto;">🧮 Calc</button>
+      </div>
+    </header>
+
+    <div class="dual-grid">
+      <div id="monitor_1">
+        <div style="margin-bottom:8px; font-weight:800; color:var(--accent)">MONITOR A (COURO)</div>
+        <section class="controls">
+          <label>Origem <select id="origin_1"><option selected>Bridgewatch</option><option>Martlock</option><option>Thetford</option><option>Fort Sterling</option><option>Lymhurst</option><option>Caerleon</option></select></label>
+          <label>Destino <select id="destination_1"><option>Bridgewatch</option><option selected>Martlock</option><option>Thetford</option><option>Fort Sterling</option><option>Lymhurst</option><option>Caerleon</option></select></label>
+          <label>Taxa % <input id="feePct_1" type="number" step="0.1" value="8.0" /></label>
+          <label>Tier <select id="tierFilter_1"><option value="">Todos</option><option value="T3_">T3</option><option value="T4_">T4</option><option value="T5_">T5</option><option value="T6_">T6</option><option value="T7_">T7</option><option value="T8_">T8</option></select></label>
+          <label>Recurso <select id="resourceFilter_1"><option value="_HIDE" selected>Couro</option><option value="_ORE">Minério</option><option value="_FIBER">Fibra</option><option value="_WOOD">Madeira</option><option value="_ROCK">Pedra</option></select></label>
+          <div style="grid-column: span 2; display:flex; gap:5px; justify-content:end; align-items:end;">
+            <button class="btn" id="swapBtn_1">↔</button>
+            <button class="btn" id="refreshBtn_1">Atualizar</button>
+          </div>
+        </section>
+        <section id="bestTrade_1" style="margin-top:10px; background:var(--panel); padding:10px; border-radius:12px; border:1px solid #1f2740"><div class="muted">Melhor oportunidade:</div><div id="bestTradeItem_1" style="font-size:14px; font-weight:600">—</div></section>
+        <section class="grid-container"><div class="table-scroll"><table id="table_1"><thead><tr><th>Item</th><th class="num">Compra</th><th class="num">Venda</th><th class="num">Lucro</th><th>Tempo</th></tr></thead><tbody id="tbody_1"></tbody></table></div></section>
+        <section class="chart-section"><div style="display:flex; justify-content:space-between; margin-bottom:10px"><strong style="font-size:12px">Histórico</strong><select id="historyRange_1" style="background:var(--chip); color:var(--text); border:1px solid #1f2740; border-radius:8px; font-size:10px"><option value="168">7 Dias</option><option value="720">30 Dias</option></select></div><canvas id="chart_1" height="150"></canvas></section>
+      </div>
+
+      <div id="monitor_2">
+        <div style="margin-bottom:8px; font-weight:800; color:#d18e30">MONITOR B (PEDRA)</div>
+        <section class="controls">
+          <label>Origem <select id="origin_2"><option>Bridgewatch</option><option selected>Martlock</option><option>Thetford</option><option>Fort Sterling</option><option>Lymhurst</option><option>Caerleon</option></select></label>
+          <label>Destino <select id="destination_2"><option selected>Bridgewatch</option><option>Martlock</option><option>Thetford</option><option>Fort Sterling</option><option>Lymhurst</option><option>Caerleon</option></select></label>
+          <label>Taxa % <input id="feePct_2" type="number" step="0.1" value="8.0" /></label>
+          <label>Tier <select id="tierFilter_2"><option value="">Todos</option><option value="T3_">T3</option><option value="T4_">T4</option><option value="T5_">T5</option><option value="T6_">T6</option><option value="T7_">T7</option><option value="T8_">T8</option></select></label>
+          <label>Recurso <select id="resourceFilter_2"><option value="_HIDE">Couro</option><option value="_ORE">Minério</option><option value="_FIBER">Fibra</option><option value="_WOOD">Madeira</option><option value="_ROCK" selected>Pedra</option></select></label>
+          <div style="grid-column: span 2; display:flex; gap:5px; justify-content:end; align-items:end;">
+            <button class="btn" id="swapBtn_2">↔</button>
+            <button class="btn" id="refreshBtn_2">Atualizar</button>
+          </div>
+        </section>
+        <section id="bestTrade_2" style="margin-top:10px; background:var(--panel); padding:10px; border-radius:12px; border:1px solid #1f2740"><div class="muted">Melhor oportunidade:</div><div id="bestTradeItem_2" style="font-size:14px; font-weight:600">—</div></section>
+        <section class="grid-container"><div class="table-scroll"><table id="table_2"><thead><tr><th>Item</th><th class="num">Compra</th><th class="num">Venda</th><th class="num">Lucro</th><th>Tempo</th></tr></thead><tbody id="tbody_2"></tbody></table></div></section>
+        <section class="chart-section"><div style="display:flex; justify-content:space-between; margin-bottom:10px"><strong style="font-size:12px">Histórico</strong><select id="historyRange_2" style="background:var(--chip); color:var(--text); border:1px solid #1f2740; border-radius:8px; font-size:10px"><option value="168">7 Dias</option><option value="720">30 Dias</option></select></div><canvas id="chart_2" height="150"></canvas></section>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div id="calcPanel" style="display:none; position: fixed; top: 80px; right: 20px; width: 250px; background: var(--panel); padding: 16px; border-radius: 16px; box-shadow: 0 10px 32px rgba(0,0,0,.5); font-size: 13px; z-index:999; border:1px solid #2a3660;">
+    <h3 style="margin:0 0 10px; font-size:14px; font-weight:700; color:var(--accent)">🧮 Calculadora</h3>
+    <input type="number" id="calcBuy" placeholder="Preço Compra" style="width:100%; margin-bottom:5px; padding:6px; background:#0b0e14; border:1px solid #2a3660; color:white; border-radius:6px">
+    <input type="number" id="calcSell" placeholder="Preço Venda" style="width:100%; margin-bottom:5px; padding:6px; background:#0b0e14; border:1px solid #2a3660; color:white; border-radius:6px">
+    <input type="number" id="calcQty" placeholder="Qtd" value="1" style="width:100%; margin-bottom:5px; padding:6px; background:#0b0e14; border:1px solid #2a3660; color:white; border-radius:6px">
+    <button class="btn" id="calcBtn" style="width:100%; margin-top:5px; background:var(--accent); color:#000; border:none; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer">Calcular</button>
+    <div id="calcResult" style="margin-top:10px; font-weight:600; text-align:center; line-height:1.4">—</div>
+  </div>
+
+  <script>
+    const ITEMS_DEF = [
+       { id: 'T3_ORE', name: 'T3 Minério' }, { id: 'T4_ORE', name: 'T4 Minério' }, { id: 'T5_ORE', name: 'T5 Minério' }, { id: 'T6_ORE', name: 'T6 Minério' }, { id: 'T7_ORE', name: 'T7 Minério' }, { id: 'T8_ORE', name: 'T8 Minério' },
+       { id: 'T3_HIDE', name: 'T3 Couro' }, { id: 'T4_HIDE', name: 'T4 Couro' }, { id: 'T5_HIDE', name: 'T5 Couro' }, { id: 'T6_HIDE', name: 'T6 Couro' }, { id: 'T7_HIDE', name: 'T7 Couro' }, { id: 'T8_HIDE', name: 'T8 Couro' },
+       { id: 'T3_FIBER', name: 'T3 Fibra' }, { id: 'T4_FIBER', name: 'T4 Fibra' }, { id: 'T5_FIBER', name: 'T5 Fibra' }, { id: 'T6_FIBER', name: 'T6 Fibra' }, { id: 'T7_FIBER', name: 'T7 Fibra' }, { id: 'T8_FIBER', name: 'T8 Fibra' },
+       { id: 'T3_WOOD', name: 'T3 Madeira' }, { id: 'T4_WOOD', name: 'T4 Madeira' }, { id: 'T5_WOOD', name: 'T5 Madeira' }, { id: 'T6_WOOD', name: 'T6 Madeira' }, { id: 'T7_WOOD', name: 'T7 Madeira' }, { id: 'T8_WOOD', name: 'T8 Madeira' },
+       { id: 'T3_ROCK', name: 'T3 Pedra' }, { id: 'T4_ROCK', name: 'T4 Pedra' }, { id: 'T5_ROCK', name: 'T5 Pedra' }, { id: 'T6_ROCK', name: 'T6 Pedra' }, { id: 'T7_ROCK', name: 'T7 Pedra' }, { id: 'T8_ROCK', name: 'T8 Pedra' }
+    ];
+
+    const CITY_COLORS = { 'Bridgewatch': '#e68c3a', 'Martlock': '#4b91e3', 'Thetford': '#a85fb0', 'Fort Sterling': '#dce3ed', 'Lymhurst': '#8bc34a', 'Caerleon': '#e0534c' };
+
+    function fmtMoney(n) { return n != null ? Number(n).toLocaleString('pt-BR') : '—'; }
+    function ago(dStr) {
+      if (!dStr) return '-';
+      const sec = (Date.now() - new Date(dStr).getTime()) / 1000;
+      if (sec<60) return Math.floor(sec)+'s';
+      if (sec<3600) return Math.floor(sec/60)+'m';
+      return Math.floor(sec/3600)+'h';
+    }
+
+    class TradeMonitor {
+      constructor(id) {
+        this.id = id;
+        this.rowsState = [];
+        this.chartInstance = null;
+        this.timer = null;
+        this.el = {
+          origin: document.getElementById('origin'+id), dest: document.getElementById('destination'+id), fee: document.getElementById('feePct'+id),
+          tier: document.getElementById('tierFilter'+id), res: document.getElementById('resourceFilter'+id), tbody: document.getElementById('tbody'+id),
+          refresh: document.getElementById('refreshBtn'+id), swap: document.getElementById('swapBtn'+id), best: document.getElementById('bestTradeItem'+id),
+          chartCanvas: document.getElementById('chart'+id), histRange: document.getElementById('historyRange'+id)
+        };
+
+        this.el.refresh.onclick = () => this.update();
+        this.el.swap.onclick = () => { [this.el.origin.value, this.el.dest.value] = [this.el.dest.value, this.el.origin.value]; this.update(); };
+        this.el.tbody.onclick = (e) => { const tr = e.target.closest('tr'); if(tr) this.loadHistory(tr.dataset.id, tr.dataset.name); };
+
+        this.startAutoRefresh();
+        this.update();
+      }
+
+      startAutoRefresh() {
+        if(this.timer) clearInterval(this.timer);
+        const sec = parseInt(document.getElementById('globalRefreshInterval').value) || 1;
+        this.timer = setInterval(() => this.update(), sec * 1000);
+      }
+
+      async update() {
+        const origin = this.el.origin.value, dest = this.el.dest.value;
+        if(origin === dest) return;
+        const fee = parseFloat(this.el.fee.value) || 0, filterT = this.el.tier.value, filterR = this.el.res.value;
+        const list = ITEMS_DEF.filter(it => (!filterT || it.id.startsWith(filterT)) && (!filterR || it.id.endsWith(filterR)));
+        const ids = list.map(it => it.id).join(',');
+        
+        try {
+          const res = await fetch(`https://www.albion-online-data.com/api/v2/stats/Prices/${ids}?locations=${origin},${dest}&qualities=1`);
+          const data = await res.json();
+          const map = new Map();
+          data.forEach(d => map.set(d.item_id + '|' + d.city, d));
+
+          this.rowsState = list.map(it => {
+            const o = map.get(it.id + '|' + origin) || {}, d = map.get(it.id + '|' + dest) || {};
+            const buy = o.sell_price_min || 0, sell = d.buy_price_max || 0;
+            const profit = (buy > 0 && sell > 0) ? Math.floor(sell * (1 - fee/100) - buy) : null;
+            return { id: it.id, name: it.name, buyOrigin: buy, sellInstantDest: sell, profitInstant: profit, tOrigin: o.sell_price_min_date, tDest: d.buy_price_max_date };
+          });
+
+          this.render();
+          document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        } catch(e) { console.error(e); }
+      }
+
+      render() {
+        const sorted = this.rowsState.sort((a,b) => (b.profitInstant||-9e9) - (a.profitInstant||-9e9));
+        if(sorted[0]?.profitInstant > 0) this.el.best.innerHTML = `<span style="color:var(--accent)">${sorted[0].name}</span>: <span class="good">${fmtMoney(sorted[0].profitInstant)}</span>`;
+        this.el.tbody.innerHTML = sorted.map(r => `
+          <tr data-id="${r.id}" data-name="${r.name}">
+            <td><div style="font-weight:600">${r.name}</div></td>
+            <td class="num mono">${fmtMoney(r.buyOrigin)}</td>
+            <td class="num mono">${fmtMoney(r.sellInstantDest)}</td>
+            <td class="num mono ${r.profitInstant>0?'good':(r.profitInstant<0?'bad':'muted')}">${fmtMoney(r.profitInstant)}</td>
+            <td class="muted" style="font-size:10px">${ago(r.tOrigin)}/${ago(r.tDest)}</td>
+          </tr>
+        `).join('');
+      }
+
+      async loadHistory(itemId, itemName) {
+        const origin = this.el.origin.value, dest = this.el.dest.value, hours = parseInt(this.el.histRange.value);
+        const destColor = CITY_COLORS[dest] || '#7aa2ff';
+        const originColor = destColor + '99'; 
+
+        try {
+           const res = await fetch(`https://www.albion-online-data.com/api/v2/stats/history/${itemId}?locations=${origin},${dest}&time-scale=24`);
+           const data = await res.json();
+           const now = Date.now();
+           const prep = (city) => {
+             const locData = data.find(d => d.location === city);
+             if(!locData) return [];
+             return locData.data.filter(p => (now - new Date(p.timestamp).getTime()) < hours*3600*1000)
+               .map(p => ({ x: new Date(p.timestamp).toLocaleDateString() + ' ' + new Date(p.timestamp).getHours()+'h', y: p.avg_price }));
+           };
+           const ptsOrigin = prep(origin), ptsDest = prep(dest);
+           const allLabels = [...new Set([...ptsOrigin.map(p=>p.x), ...ptsDest.map(p=>p.x)])].sort();
+
+           if(this.chartInstance) this.chartInstance.destroy();
+           this.chartInstance = new Chart(this.el.chartCanvas, {
+             type: 'line',
+             data: {
+               labels: allLabels,
+               datasets: [
+                 { label: `Venda ${dest}`, data: allLabels.map(l => ptsDest.find(p=>p.x===l)?.y || null), borderColor: destColor, tension: 0.3 },
+                 { label: `Compra ${origin}`, data: allLabels.map(l => ptsOrigin.find(p=>p.x===l)?.y || null), borderColor: originColor, borderDash: [5,5], tension: 0.3 }
+               ]
+             },
+             options: { responsive: true, plugins: { legend: { labels: { color: '#8b9bb7', font: { size: 10 } } } }, scales: { y: { grid: { color: '#1f2740' }, ticks: { color: '#8b9bb7' } }, x: { display: false } } }
+           });
+        } catch(e) { console.error(e); }
+      }
+    }
+
+    const m1 = new TradeMonitor('_1');
+    const m2 = new TradeMonitor('_2');
+
+    document.getElementById('globalRefreshInterval').onchange = () => { m1.startAutoRefresh(); m2.startAutoRefresh(); };
+    document.getElementById('toggleCalcBtn').onclick = () => { const p = document.getElementById('calcPanel'); p.style.display = p.style.display==='none'?'block':'none'; };
+    
+    document.getElementById('calcBtn').onclick = () => {
+      const b = parseFloat(document.getElementById('calcBuy').value)||0;
+      const s = parseFloat(document.getElementById('calcSell').value)||0;
+      const q = parseFloat(document.getElementById('calcQty').value)||1;
+      
+      const totalBuy = b * q;
+      const totalSell = (s * q * 0.92); // Taxa de 8%
+      const prof = totalSell - totalBuy;
+      const roi = totalBuy > 0 ? (prof / totalBuy) * 100 : 0;
+      
+      const res = document.getElementById('calcResult');
+      res.innerHTML = `Lucro Líquido: <span style="color:${prof>0?'var(--good)':'var(--bad)'}">${Math.floor(prof).toLocaleString('pt-BR')}</span><br>
+                       <span style="font-size:12px; color:var(--muted)">ROI: ${roi.toFixed(2)}%</span>`;
+    };
+  </script>
+</body>
+</html>
